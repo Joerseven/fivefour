@@ -17,10 +17,15 @@
 
 #include "raylib.h"
 
-// #define PLATFORM_WEB
+//#define PLATFORM_WEB
+
+
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
+#define ASSETPATH "resources/"
+#else
+#define ASSETPATH "../resources/"
 #endif
 
 //----------------------------------------------------------------------------------
@@ -40,6 +45,8 @@ bool inMainMenu = true;
 //----------------------------------------------------------------------------------
 void UpdateDrawFrame(void); // Update and Draw one frame
 
+Texture2D monster;
+
 //------------------------------------------------------------------------------------
 // Program main entry point
 //------------------------------------------------------------------------------------
@@ -48,11 +55,16 @@ int main(void)
     // Initialization
     //--------------------------------------------------------------------------------------
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+    monster = LoadTexture(ASSETPATH "testasset.png");
+
 
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
-    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
+
+
+
+    SetTargetFPS(60);   // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -96,6 +108,7 @@ void UpdateDrawFrame(void)
 
         DrawText("FUCK YOU LOREM IPSUM! You created your first window!", 190, 200, 20, LIGHTGRAY);
     }
+    DrawTexturePro(monster, {0, 0, (float)monster.width, (float)monster.height}, {screenWidth / 2.0f, screenHeight / 2.0f, (float)monster.width, (float)monster.height }, {monster.width/2.0f, monster.height/2.0f}, 0.0f, WHITE);
 
     EndDrawing();
 
