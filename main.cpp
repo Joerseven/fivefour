@@ -1,23 +1,23 @@
 /*******************************************************************************************
-*
-*   raylib [core] example - Basic window (adapted for HTML5 platform)
-*
-*   NOTE: This example is prepared to compile for PLATFORM_WEB, and PLATFORM_DESKTOP
-*   As you will notice, code structure is slightly diferent to the other examples...
-*   To compile it for PLATFORM_WEB just uncomment #define PLATFORM_WEB at beginning
-*
-*   Example originally created with raylib 1.3, last time updated with raylib 1.3
-*
-*   Example licensed under an unmodified zlib/libpng license, which is an OSI-certified,
-*   BSD-like license that allows static linking with closed source software
-*
-*   Copyright (c) 2015-2023 Ramon Santamaria (@raysan5)
-*
-********************************************************************************************/
+ *
+ *   raylib [core] example - Basic window (adapted for HTML5 platform)
+ *
+ *   NOTE: This example is prepared to compile for PLATFORM_WEB, and PLATFORM_DESKTOP
+ *   As you will notice, code structure is slightly diferent to the other examples...
+ *   To compile it for PLATFORM_WEB just uncomment #define PLATFORM_WEB at beginning
+ *
+ *   Example originally created with raylib 1.3, last time updated with raylib 1.3
+ *
+ *   Example licensed under an unmodified zlib/libpng license, which is an OSI-certified,
+ *   BSD-like license that allows static linking with closed source software
+ *
+ *   Copyright (c) 2015-2023 Ramon Santamaria (@raysan5)
+ *
+ ********************************************************************************************/
 
 #include "raylib.h"
 
-//#define PLATFORM_WEB
+// #define PLATFORM_WEB
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
@@ -30,9 +30,15 @@ const int screenWidth = 948;
 const int screenHeight = 533;
 
 //----------------------------------------------------------------------------------
+// Main Game loop controller bools
+//----------------------------------------------------------------------------------
+
+bool inMainMenu = true;
+
+//----------------------------------------------------------------------------------
 // Module functions declaration
 //----------------------------------------------------------------------------------
-void UpdateDrawFrame(void);     // Update and Draw one frame
+void UpdateDrawFrame(void); // Update and Draw one frame
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -46,11 +52,11 @@ int main(void)
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
-    SetTargetFPS(60);   // Set our game to run at 60 frames-per-second
+    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while (!WindowShouldClose()) // Detect window close button or ESC key
     {
         UpdateDrawFrame();
     }
@@ -58,7 +64,7 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    CloseWindow();        // Close window and OpenGL context
+    CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;
@@ -78,10 +84,20 @@ void UpdateDrawFrame(void)
     //----------------------------------------------------------------------------------
     BeginDrawing();
 
-    ClearBackground(RAYWHITE);
+    if (inMainMenu)
+    {
+        ClearBackground(BLACK);
 
-    DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
+        DrawText("This is  a main menu", 0, 0, 30, LIME);
+    }
+    else
+    {
+        ClearBackground(RAYWHITE);
+
+        DrawText("FUCK YOU LOREM IPSUM! You created your first window!", 190, 200, 20, LIGHTGRAY);
+    }
 
     EndDrawing();
+
     //----------------------------------------------------------------------------------
 }
