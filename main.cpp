@@ -26,8 +26,8 @@
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
-const int screenWidth = 800;
-const int screenHeight = 450;
+const int screenWidth = 948;
+const int screenHeight = 533;
 
 //----------------------------------------------------------------------------------
 // Module functions declaration
