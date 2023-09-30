@@ -18,6 +18,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include <iostream>
+#include <cmath>
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
@@ -37,6 +38,8 @@ typedef struct Vector2Int {
 
 typedef struct Block {
     Vector2Int contents[MAXBLOCKSIZE];
+    float width;
+    int count;
 } Block;
 
 
@@ -51,7 +54,7 @@ struct Enemies {
 
 struct BlockPlacer {
     Block inventory[MAXHOLDING];
-    Block onMouse;
+    int selected;
     int currentlyHeld;
     int inventorySpot;
 } BlockPlacer;
@@ -71,14 +74,13 @@ const int rows = 10;
 const int EnemySpawnDelay = 50;
 const int BlockSpawnDelay = 300;
 
-Texture2D MainBackground;
-Texture2D SecondBackground;
-
-
+Texture2D Background;
 
 int EnemyTimer;
 int BlockTimer;
 
+Vector2 TouchPosition;
+int currentGuesture;
 
 //----------------------------------------------------------------------------------
 // Module functions declaration
@@ -91,9 +93,13 @@ void DrawEnemies();
 void UpdateEnemies(float dt);
 void UpdateBlocks(float dt);
 void DrawBlocks();
+void ManageInput();
+void ShowSelection();
+void DrawBlockOnGrid(Block block, Vector2Int position, bool fits);
+void PlaceBlock(Block block, Vector2Int position);
 
 // Global Variables
-Texture2D monster;
+
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -105,8 +111,7 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
 
     enemies.texture = LoadTexture(ASSETPATH "gj.png");
-    MainBackground = LoadTexture(ASSETPATH "window.png");
-    SecondBackground = LoadTexture(ASSETPATH "window-block.png");
+    Background = LoadTexture(ASSETPATH "fullwindow.png");
 
     int EnemyTimer = EnemySpawnDelay;
     int BlockTimer = BlockSpawnDelay;
@@ -144,6 +149,8 @@ void UpdateDrawFrame(void)
     //---------------------------------------------------------------------------------
     float dt = GetFrameTime();
 
+    ManageInput();
+
     UpdateEnemies(dt);
     UpdateBlocks(dt);
     //----------------------------------------------------------------------------------
@@ -152,13 +159,67 @@ void UpdateDrawFrame(void)
     //----------------------------------------------------------------------------------
     BeginDrawing();
 
-    ClearBackground(RAYWHITE);
+    ClearBackground((Color){186,186,186});
 
     DrawEnemies();
+    DrawTexture(Background, 0, 0, WHITE);
     DrawBlocks();
+    ShowSelection();
 
     EndDrawing();
     //----------------------------------------------------------------------------------
+}
+
+bool DoesBlockFit(Block block, Vector2Int position) {
+    for (auto & content: block.contents) {
+        if (position.x - content.x < 0 || position.x + content.x >= columns) return false;
+        if (position.y - content.y < 0 || position.y + content.y >= rows) return false;
+    }
+    return true;
+}
+
+void ManageInput() {
+
+    currentGuesture = GetGestureDetected();
+
+    if (currentGuesture == GESTURE_HOLD || currentGuesture == GESTURE_DRAG) {
+        return;
+    }
+
+    if (currentGuesture == GESTURE_NONE) {
+        BlockPlacer.selected = -1;
+        return;
+    }
+
+    if (currentGuesture == GESTURE_TAP) {
+        Rectangle touchArea = { 675, 42, 254, 479};
+        auto touchPosition = GetTouchPosition(0);
+
+        if (CheckCollisionPointRec(touchPosition, touchArea)) {
+            int item = std::round((touchPosition.y - 55) / 64);
+            if (item >= 0 && item < MAXHOLDING) {
+                BlockPlacer.selected = item;
+            }
+        }
+
+    }
+}
+
+void ShowSelection() {
+    if (BlockPlacer.selected < 0) {
+        return;
+    }
+
+    auto touchPosition = GetTouchPosition(0);
+
+    if (!isInGrid(touchPosition)) {
+        return;
+    }
+
+    auto HoverTile = PositionToGrid(touchPosition);
+    auto doesFit = DoesBlockFit(BlockPlacer.inventory[BlockPlacer.selected], HoverTile);
+    DrawBlockOnGrid(BlockPlacer.inventory[BlockPlacer.selected], HoverTile, doesFit);
+
 }
 
 Vector2Int PositionToGrid(Vector2 pos) {
@@ -232,11 +293,11 @@ Block CreateBlock() {
     int blockType = GetRandomValue(0, 2);
     switch(blockType) {
         case 0:
-            return {{{1,0}, {0,0}, {-1, 0}}};
+            return {{{1,0}, {0,0}, {-1, 0}}, 1.5, 3};
         case 1:
-            return {{{1,0}, {0, 1}}};
+            return {{{1,0}, {0, 1}}, 2, 3};
         default:
-            return {{{0,0}}};
+            return {{{0,0}}, 1, 1};
     }
 
 }
@@ -251,22 +312,26 @@ void UpdateBlocks(float dt) {
             BlockPlacer.inventory[BlockPlacer.inventorySpot] = CreateBlock();
             BlockPlacer.inventorySpot += 1;
         }
-
     }
-
-
 }
 
-void DrawBlock(Block block, Vector2 position) {
-    for (int i=0;i<MAXBLOCKSIZE;i++) {
-        DrawRectangle(block.contents[i].x*48 + position.x, block.contents[i].y * 48 + position.y, 48, 48, GRAY);
+void DrawBlockOnGrid(Block block, Vector2Int position, bool fits) {
+    for (int i = 0;i<block.count; i++) {
+        auto pos = GridToPosition({position.x + block.contents[i].x, position.y + block.contents[i].y});
+        DrawRectangle(pos.x, pos.y, 48, 48, fits ? (Color){30,170,30,130} : (Color){170, 30 , 30, 130});
+    }
+}
+
+void DrawBlock(Block block, Vector2 position, int size) {
+    for (auto & content : block.contents) {
+        DrawRectangle(content.x*size + position.x, content.y*size + position.y, size, size, GRAY);
     }
 }
 
 void DrawBlocks() {
     for (int i=0;i<MAXHOLDING;i++) {
         if (i >= BlockPlacer.inventorySpot) return;
-        DrawBlock(BlockPlacer.inventory[i], {798, gridOffsetY + i*2*48.0f});
+        DrawBlock(BlockPlacer.inventory[i], {802.0f - BlockPlacer.inventory[i].width * 12, 55 + i*64.0f}, 24);
     }
 }
 
