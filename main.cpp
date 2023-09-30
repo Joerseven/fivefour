@@ -27,11 +27,18 @@
 #endif
 
 #define MAXENEMIES 30
+#define MAXBLOCKSIZE 6
+#define MAXHOLDING 5
 
 typedef struct Vector2Int {
     int x;
     int y;
 } Vector2Int;
+
+typedef struct Block {
+    Vector2Int contents[MAXBLOCKSIZE];
+} Block;
+
 
 struct Enemies {
     Vector2 position[MAXENEMIES];
@@ -41,6 +48,14 @@ struct Enemies {
     Texture2D texture;
 } enemies;
 
+
+struct BlockPlacer {
+    Block inventory[MAXHOLDING];
+    Block onMouse;
+    int currentlyHeld;
+    int inventorySpot;
+} BlockPlacer;
+
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
@@ -49,11 +64,21 @@ const int screenHeight = 533;
 
 const int gridOffsetX = 30;
 const int gridOffsetY = 35;
+
 const int columns = 13;
 const int rows = 10;
-const int spawnDelay = 50;
 
-int timer = spawnDelay;
+const int EnemySpawnDelay = 50;
+const int BlockSpawnDelay = 300;
+
+Texture2D MainBackground;
+Texture2D SecondBackground;
+
+
+
+int EnemyTimer;
+int BlockTimer;
+
 
 //----------------------------------------------------------------------------------
 // Module functions declaration
@@ -64,6 +89,8 @@ Vector2 GridToPosition(Vector2Int pos);
 bool isInGrid(Vector2 pos);
 void DrawEnemies();
 void UpdateEnemies(float dt);
+void UpdateBlocks(float dt);
+void DrawBlocks();
 
 // Global Variables
 Texture2D monster;
@@ -76,7 +103,15 @@ int main(void)
     // Initialization
     //--------------------------------------------------------------------------------------
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+
     enemies.texture = LoadTexture(ASSETPATH "gj.png");
+    MainBackground = LoadTexture(ASSETPATH "window.png");
+    SecondBackground = LoadTexture(ASSETPATH "window-block.png");
+
+    int EnemyTimer = EnemySpawnDelay;
+    int BlockTimer = BlockSpawnDelay;
+    BlockPlacer.currentlyHeld = 0;
+    BlockPlacer.inventorySpot = 0;
 
 
 #if defined(PLATFORM_WEB)
@@ -108,7 +143,9 @@ void UpdateDrawFrame(void)
     // Update
     //---------------------------------------------------------------------------------
     float dt = GetFrameTime();
+
     UpdateEnemies(dt);
+    UpdateBlocks(dt);
     //----------------------------------------------------------------------------------
 
     // Draw
@@ -118,6 +155,7 @@ void UpdateDrawFrame(void)
     ClearBackground(RAYWHITE);
 
     DrawEnemies();
+    DrawBlocks();
 
     EndDrawing();
     //----------------------------------------------------------------------------------
@@ -161,11 +199,11 @@ void SpawnEnemy(int index) {
 }
 
 void UpdateEnemies(float dt) {
-    timer -= dt;
+    EnemyTimer -= dt;
     bool spawnEnemy = false;
 
-    if (timer <= 0) {
-        timer = spawnDelay;
+    if (EnemyTimer <= 0) {
+        EnemyTimer = EnemySpawnDelay;
         spawnEnemy = true;
     }
 
@@ -187,6 +225,48 @@ void DrawEnemies() {
     for (int i=0;i<MAXENEMIES;i++) {
         if (!enemies.enabled[i]) continue;
         DrawTexturePro(enemies.texture, {0, 0, (float)enemies.texture.width, (float)enemies.texture.height}, {enemies.position[i].x, enemies.position[i].y, (float)enemies.texture.width, (float)enemies.texture.height}, {enemies.texture.width / 2.0f, enemies.texture.height / 2.0f}, 0, WHITE);
+    }
+}
+
+Block CreateBlock() {
+    int blockType = GetRandomValue(0, 2);
+    switch(blockType) {
+        case 0:
+            return {{{1,0}, {0,0}, {-1, 0}}};
+        case 1:
+            return {{{1,0}, {0, 1}}};
+        default:
+            return {{{0,0}}};
+    }
+
+}
+
+void UpdateBlocks(float dt) {
+
+    BlockTimer -= dt;
+    if (BlockTimer <= 0) {
+        BlockTimer = BlockSpawnDelay;
+
+        if (BlockPlacer.inventorySpot < MAXHOLDING) {
+            BlockPlacer.inventory[BlockPlacer.inventorySpot] = CreateBlock();
+            BlockPlacer.inventorySpot += 1;
+        }
+
+    }
+
+
+}
+
+void DrawBlock(Block block, Vector2 position) {
+    for (int i=0;i<MAXBLOCKSIZE;i++) {
+        DrawRectangle(block.contents[i].x*48 + position.x, block.contents[i].y * 48 + position.y, 48, 48, GRAY);
+    }
+}
+
+void DrawBlocks() {
+    for (int i=0;i<MAXHOLDING;i++) {
+        if (i >= BlockPlacer.inventorySpot) return;
+        DrawBlock(BlockPlacer.inventory[i], {798, gridOffsetY + i*2*48.0f});
     }
 }
 
