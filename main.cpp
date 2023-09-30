@@ -55,7 +55,6 @@ struct Enemies {
 struct BlockPlacer {
     Block inventory[MAXHOLDING];
     int selected;
-    int currentlyHeld;
     int inventorySpot;
 } BlockPlacer;
 
@@ -96,7 +95,7 @@ void DrawBlocks();
 void ManageInput();
 void ShowSelection();
 void DrawBlockOnGrid(Block block, Vector2Int position, bool fits);
-void PlaceBlock(Block block, Vector2Int position);
+void PlaceBlock(Block block, Vector2Int position, bool doesFit);
 
 // Global Variables
 
@@ -115,7 +114,6 @@ int main(void)
 
     int EnemyTimer = EnemySpawnDelay;
     int BlockTimer = BlockSpawnDelay;
-    BlockPlacer.currentlyHeld = 0;
     BlockPlacer.inventorySpot = 0;
 
 
@@ -172,8 +170,8 @@ void UpdateDrawFrame(void)
 
 bool DoesBlockFit(Block block, Vector2Int position) {
     for (auto & content: block.contents) {
-        if (position.x - content.x < 0 || position.x + content.x >= columns) return false;
-        if (position.y - content.y < 0 || position.y + content.y >= rows) return false;
+        if (position.x + content.x < 0 || position.x + content.x >= columns) return false;
+        if (position.y + content.y < 0 || position.y + content.y >= rows) return false;
     }
     return true;
 }
@@ -182,16 +180,14 @@ void ManageInput() {
 
     currentGuesture = GetGestureDetected();
 
+
+
     if (currentGuesture == GESTURE_HOLD || currentGuesture == GESTURE_DRAG) {
-        return;
-    }
 
-    if (currentGuesture == GESTURE_NONE) {
-        BlockPlacer.selected = -1;
-        return;
-    }
+        if (BlockPlacer.selected != -1) {
+            return;
+        }
 
-    if (currentGuesture == GESTURE_TAP) {
         Rectangle touchArea = { 675, 42, 254, 479};
         auto touchPosition = GetTouchPosition(0);
 
@@ -202,6 +198,37 @@ void ManageInput() {
             }
         }
 
+        return;
+    }
+
+    if (currentGuesture == GESTURE_NONE) {
+        std::cout << "Nothing" << std::endl;
+
+        if (BlockPlacer.selected >= 0) {
+            auto touchPosition = GetTouchPosition(0);
+            if (isInGrid(touchPosition)) {
+                auto HoverTile = PositionToGrid(touchPosition);
+                auto doesFit = DoesBlockFit(BlockPlacer.inventory[BlockPlacer.selected], HoverTile);
+                PlaceBlock(BlockPlacer.inventory[BlockPlacer.selected], HoverTile, doesFit);
+            }
+        }
+
+        BlockPlacer.selected = -1;
+        return;
+    }
+}
+
+void ShuffleDownBlocks(int selected) {
+    for (int i=BlockPlacer.selected+1; i<BlockPlacer.inventorySpot; i++) {
+        BlockPlacer.inventory[i - 1] = BlockPlacer.inventory[i];
+    }
+
+    BlockPlacer.inventorySpot--;
+}
+
+void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
+    if (doesFit) {
+        ShuffleDownBlocks(BlockPlacer.selected);
     }
 }
 
@@ -295,7 +322,7 @@ Block CreateBlock() {
         case 0:
             return {{{1,0}, {0,0}, {-1, 0}}, 1.5, 3};
         case 1:
-            return {{{1,0}, {0, 1}}, 2, 3};
+            return {{{1,0}, {0, 1}, {0,0}}, 2, 3};
         default:
             return {{{0,0}}, 1, 1};
     }
