@@ -16,6 +16,7 @@
 ********************************************************************************************/
 
 #include "raylib.h"
+#include <iostream>
 
 //#define PLATFORM_WEB
 
@@ -28,17 +29,29 @@
 #define ASSETPATH "../resources/"
 #endif
 
+typedef struct Vector2Int {
+    int x;
+    int y;
+} Vector2Int;
+
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
 const int screenWidth = 948;
 const int screenHeight = 533;
 
+const int gridOffsetX = 30;
+const int gridOffsetY = 35;
+
 //----------------------------------------------------------------------------------
 // Module functions declaration
 //----------------------------------------------------------------------------------
 void UpdateDrawFrame(void); // Update and Draw one frame
+Vector2Int PositionToGrid(Vector2 pos);
+Vector2 GridToPosition(Vector2Int pos);
+bool isInGrid(Vector2 pos);
 
+// Global Variables
 Texture2D monster;
 
 //------------------------------------------------------------------------------------
@@ -82,8 +95,8 @@ int main(void)
 void UpdateDrawFrame(void)
 {
     // Update
-    //----------------------------------------------------------------------------------
-    // TODO: Update your variables here
+    //---------------------------------------------------------------------------------
+
     //----------------------------------------------------------------------------------
 
     // Draw
@@ -93,8 +106,24 @@ void UpdateDrawFrame(void)
     ClearBackground(RAYWHITE);
 
     DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
-    DrawTexturePro(monster, {0, 0, (float)monster.width, (float)monster.height}, {screenWidth / 2.0f, screenHeight / 2.0f, (float)monster.width, (float)monster.height }, {monster.width/2.0f, monster.height/2.0f}, 0.0f, WHITE);
+    DrawTexturePro(monster, {0, 0, (float)monster.width, (float)monster.height},
+                   {screenWidth / 2.0f, screenHeight / 2.0f, (float)monster.width, (float)monster.height },
+                   {monster.width/2.0f, monster.height/2.0f}, 0.0f, WHITE);
 
     EndDrawing();
     //----------------------------------------------------------------------------------
 }
+
+Vector2Int PositionToGrid(Vector2 pos) {
+    return { (int)((pos.x - gridOffsetX) / 48), (int)((pos.y - gridOffsetY) / 48)};
+}
+
+Vector2 GridToPosition(Vector2Int pos) {
+    return {(pos.x*48.0f) + gridOffsetX, (pos.y*48.0f) + gridOffsetY};
+}
+
+bool isInGrid(Vector2 position) {
+    return position.x >= gridOffsetX && position.x <= gridOffsetX + (48 * 13) &&
+    position.y >= gridOffsetY && position.y <= gridOffsetY + (48 * 10);
+}
+
