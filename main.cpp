@@ -64,8 +64,8 @@ struct BlockPlacer {
 const int screenWidth = 948;
 const int screenHeight = 533;
 
-const int gridOffsetX = 30;
-const int gridOffsetY = 35;
+const int gridOffsetX = 35;
+const int gridOffsetY = 40;
 
 const int columns = 13;
 const int rows = 10;
@@ -326,7 +326,6 @@ Block CreateBlock() {
         default:
             return {{{0,0}}, 1, 1};
     }
-
 }
 
 void UpdateBlocks(float dt) {
