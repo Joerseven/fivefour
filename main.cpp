@@ -58,6 +58,8 @@ struct BlockPlacer {
     int inventorySpot;
 } BlockPlacer;
 
+int grid[10][13];
+
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
@@ -96,6 +98,8 @@ void ManageInput();
 void ShowSelection();
 void DrawBlockOnGrid(Block block, Vector2Int position, bool fits);
 void PlaceBlock(Block block, Vector2Int position, bool doesFit);
+void UpdateGrid(float dt);
+void DisplayBrokenTiles();
 
 // Global Variables
 
@@ -151,6 +155,7 @@ void UpdateDrawFrame(void)
 
     UpdateEnemies(dt);
     UpdateBlocks(dt);
+    UpdateGrid(dt);
     //----------------------------------------------------------------------------------
 
     // Draw
@@ -162,17 +167,23 @@ void UpdateDrawFrame(void)
     DrawEnemies();
     DrawTexture(Background, 0, 0, WHITE);
     DrawBlocks();
+    DisplayBrokenTiles();
     ShowSelection();
 
     EndDrawing();
     //----------------------------------------------------------------------------------
 }
 
+
+
 bool DoesBlockFit(Block block, Vector2Int position) {
     for (auto & content: block.contents) {
         if (position.x + content.x < 0 || position.x + content.x >= columns) return false;
         if (position.y + content.y < 0 || position.y + content.y >= rows) return false;
+
+        if (grid[position.y+content.y][position.x+content.x] != 0) return false;
     }
+
     return true;
 }
 
@@ -180,11 +191,13 @@ void ManageInput() {
 
     currentGuesture = GetGestureDetected();
 
-
-
     if (currentGuesture == GESTURE_HOLD || currentGuesture == GESTURE_DRAG) {
 
         if (BlockPlacer.selected != -1) {
+            return;
+        }
+
+        if (BlockPlacer.inventorySpot == 0) {
             return;
         }
 
@@ -228,7 +241,31 @@ void ShuffleDownBlocks(int selected) {
 
 void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
     if (doesFit) {
+        for (auto &content: block.contents) {
+            grid[position.y + content.y][position.x + content.x] = 1000;
+        }
         ShuffleDownBlocks(BlockPlacer.selected);
+    }
+}
+
+void UpdateGrid(float dt) {
+    for (int i=0;i<10;i++) {
+        for (int j=0;j<13;j++) {
+            if (grid[i][j] > 0) {
+                grid[i][j]--;
+            }
+        }
+    }
+}
+
+void DisplayBrokenTiles() {
+    for (int i=0;i<10;i++) {
+        for (int j=0;j<13;j++) {
+            if (grid[i][j] > 0) {
+                auto pos = GridToPosition({j, i});
+                DrawRectangle(pos.x, pos.y, 48, 48, RED);
+            }
+        }
     }
 }
 
