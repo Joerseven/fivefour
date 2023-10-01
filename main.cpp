@@ -45,8 +45,8 @@ typedef struct Block {
 
 struct Enemies {
     Vector2 position[MAXENEMIES];
-    Vector2 velocity[MAXENEMIES];
-    Vector2Int gridSpace[MAXENEMIES];
+    Vector2 target[MAXENEMIES];
+    float waitTime[MAXENEMIES];
     bool enabled [MAXENEMIES];
     Texture2D texture;
 } enemies;
@@ -72,10 +72,16 @@ const int gridOffsetY = 40;
 const int columns = 13;
 const int rows = 10;
 
-const int EnemySpawnDelay = 50;
+const int EnemySpawnDelay = 2000;
 const int BlockSpawnDelay = 300;
 
+const int EnemyHideTime = 500;
+const int EnemySpeed = 25;
+const Vector2Int FinalTile = {7,6};
+
 Texture2D Background;
+Texture2D FolderBack;
+Texture2D FolderFront;
 
 int EnemyTimer;
 int BlockTimer;
@@ -100,6 +106,8 @@ void DrawBlockOnGrid(Block block, Vector2Int position, bool fits);
 void PlaceBlock(Block block, Vector2Int position, bool doesFit);
 void UpdateGrid(float dt);
 void DisplayBrokenTiles();
+void DrawFolderBacks();
+void DrawFolderFronts();
 
 // Global Variables
 
@@ -115,6 +123,8 @@ int main(void)
 
     enemies.texture = LoadTexture(ASSETPATH "gj.png");
     Background = LoadTexture(ASSETPATH "fullwindow.png");
+    FolderBack = LoadTexture(ASSETPATH "folde-back-paper.png");
+    FolderFront = LoadTexture(ASSETPATH "folder-front.png");
 
     int EnemyTimer = EnemySpawnDelay;
     int BlockTimer = BlockSpawnDelay;
@@ -135,6 +145,7 @@ int main(void)
 #endif
 
     // De-Initialization
+    // Don't forget to unload the textures here.
     //--------------------------------------------------------------------------------------
     CloseWindow();        // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
@@ -164,7 +175,9 @@ void UpdateDrawFrame(void)
 
     ClearBackground((Color){186,186,186});
 
+    DrawFolderBacks();
     DrawEnemies();
+    DrawFolderFronts();
     DrawTexture(Background, 0, 0, WHITE);
     DrawBlocks();
     DisplayBrokenTiles();
@@ -174,7 +187,23 @@ void UpdateDrawFrame(void)
     //----------------------------------------------------------------------------------
 }
 
+void DrawFolderBacks() {
+    for (int i=0; i<columns; i++) {
+        for (int j=0; j<rows; j++) {
+            auto position = GridToPosition({i, j});
+            DrawTexture(FolderBack, (int)position.x, (int)position.y, WHITE);
+        }
+    }
+}
 
+void DrawFolderFronts() {
+    for (int i=0; i<columns; i++) {
+        for (int j=0; j<rows; j++) {
+            auto position = GridToPosition({i, j});
+            DrawTexture(FolderFront, (int)position.x, (int)position.y, WHITE);
+        }
+    }
+}
 
 bool DoesBlockFit(Block block, Vector2Int position) {
     for (auto & content: block.contents) {
@@ -314,22 +343,48 @@ void SpawnEnemy(int index) {
 
     int side = GetRandomValue(1, 4);
 
+    enemies.waitTime[index] = 0;
+
     if (side % 2 == 0) {
-        enemies.position[index].y = GetRandomValue(gridOffsetY, gridOffsetY + (48 * rows));
-        enemies.position[index].x = gridOffsetX + (48 * columns)*((side-1)/2);
+
+        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? 12 : 0, GetRandomValue(0,9)}), {24,24});
+
+        enemies.position[index].y = enemies.target[index].y;
+        enemies.position[index].x = enemies.target[index].x - (((side-1)/2 > 0) ? -48.0f : 48.0f);
 
     } else {
-        enemies.position[index].x = GetRandomValue(gridOffsetX, gridOffsetX + (48 * columns));
-        enemies.position[index].y = gridOffsetY + (48 * rows)*((side-1)/2);
+
+        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,12), ((side-1)/2 > 0) ? 9 : 0}), {24,24});
+
+        enemies.position[index].y = enemies.target[index].y -(((side-1)/2 > 0) ? -48.0f : 48.0f);
+        enemies.position[index].x = enemies.target[index].x;
+    }
+    enemies.enabled[index] = true;
+}
+
+void GameOver() {
+
+}
+
+Vector2 GetNextMoveTile(int index) {
+    int direction = GetRandomValue(0,1);
+    Vector2Int currentTile = PositionToGrid(enemies.position[index]);
+
+    if (currentTile.x == FinalTile.x && currentTile.y == FinalTile.y) {
+        GameOver();
     }
 
-    auto target = GridToPosition({6,3});
-    auto mag = Vector2Normalize({target.x - enemies.position[index].x, target.y - enemies.position[index].y});
+    Vector2Int target;
 
-    enemies.velocity[index].x = mag.x;
-    enemies.velocity[index].y = mag.y;
-
-    enemies.enabled[index] = true;
+    if ((direction == 1 && currentTile.x != FinalTile.x) || currentTile.y == FinalTile.y) {
+        target.x = (currentTile.x > FinalTile.x) ? currentTile.x - 1 : currentTile.x + 1;
+        target.y = currentTile.y;
+        return Vector2Add(GridToPosition(target),{24,24});
+    } else {
+        target.y = (currentTile.y > FinalTile.y) ? currentTile.y - 1 : currentTile.y + 1;
+        target.x = currentTile.x;
+        return Vector2Add(GridToPosition(target),{24,24});
+    }
 
 }
 
@@ -351,12 +406,25 @@ void UpdateEnemies(float dt) {
             continue;
         }
 
-        enemies.position[i] = Vector2Add(enemies.position[i], enemies.velocity[i]);
+        if (enemies.waitTime[i] > 0) {
+            enemies.waitTime[i] -= dt;
+            continue;
+        }
+
+        auto distanceVector = Vector2Subtract(enemies.target[i], enemies.position[i]);
+        auto moveVector = Vector2Scale(Vector2Normalize(distanceVector), EnemySpeed * dt);
+
+        if (Vector2LengthSqr(moveVector) >= Vector2LengthSqr(distanceVector)) {
+            enemies.position[i] = enemies.target[i];
+            enemies.waitTime[i] = EnemyHideTime;
+            enemies.target[i] = GetNextMoveTile(i);
+        }
+
+        enemies.position[i] = Vector2Add(enemies.position[i], moveVector);
     }
 }
 
 void DrawEnemies() {
-
     for (int i=0;i<MAXENEMIES;i++) {
         if (!enemies.enabled[i]) continue;
         DrawTexturePro(enemies.texture, {0, 0, (float)enemies.texture.width, (float)enemies.texture.height}, {enemies.position[i].x, enemies.position[i].y, (float)enemies.texture.width, (float)enemies.texture.height}, {enemies.texture.width / 2.0f, enemies.texture.height / 2.0f}, 0, WHITE);
