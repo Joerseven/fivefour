@@ -215,7 +215,6 @@ void ManageInput() {
     }
 
     if (currentGuesture == GESTURE_NONE) {
-        std::cout << "Nothing" << std::endl;
 
         if (BlockPlacer.selected >= 0) {
             auto touchPosition = GetTouchPosition(0);
@@ -239,10 +238,21 @@ void ShuffleDownBlocks(int selected) {
     BlockPlacer.inventorySpot--;
 }
 
+void KillEnemy(int index) {
+    enemies.enabled[index] = false;
+}
+
 void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
     if (doesFit) {
         for (auto &content: block.contents) {
             grid[position.y + content.y][position.x + content.x] = 1000;
+
+            for (int i=0;i<MAXENEMIES;i++) {
+                auto tile = PositionToGrid(enemies.position[i]);
+                if (tile.x == position.x + content.x && tile.y == position.y + content.y) {
+                    KillEnemy(i);
+                }
+            }
         }
         ShuffleDownBlocks(BlockPlacer.selected);
     }
