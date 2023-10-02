@@ -61,14 +61,14 @@ struct Enemies {
     float waitTime[MAXENEMIES];
     bool enabled [MAXENEMIES];
     Texture2D texture;
-} enemies;
+} enemies, e;
 
 
 struct BlockPlacer {
     Block inventory[MAXHOLDING];
     int selected;
     int inventorySpot;
-} BlockPlacer;
+} BlockPlacer, b;
 
 ParticleBurst ParticleSystem[20];
 
@@ -91,14 +91,29 @@ const int BlockSpawnDelay = 3;
 
 const int EnemyHideTime = 4;
 const int EnemySpeed = 25;
-const Vector2Int FinalTile = {7,6};
+const Vector2Int FinalTile = {columns/2,rows/2};
 
 Texture2D Background;
 Texture2D FolderBack;
 Texture2D FolderFront;
+Texture2D BrokenFolderFront;
+Texture2D BrokenFolderBack;
+Texture2D PressedButton;
+Texture2D Command;
+
+Sound Place;
+Sound Pickup;
+Sound Rotate;
+
+Font TheFont;
+
+int score;
+int hScore;
 
 float EnemyTimer;
 float BlockTimer;
+
+int state = 0;
 
 Vector2 TouchPosition;
 int currentGesture;
@@ -137,14 +152,26 @@ int main(void)
     // Initialization
     //--------------------------------------------------------------------------------------
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+    InitAudioDevice();
 
     enemies.texture = LoadTexture(ASSETPATH "gj.png");
+    e.texture = enemies.texture;
     Background = LoadTexture(ASSETPATH "fullwindow.png");
     FolderBack = LoadTexture(ASSETPATH "folde-back-paper.png");
     FolderFront = LoadTexture(ASSETPATH "folder-front.png");
+    BrokenFolderFront = LoadTexture(ASSETPATH "brokerino-front.png");
+    BrokenFolderBack = LoadTexture(ASSETPATH "brokerino-back.png");
+    PressedButton = LoadTexture(ASSETPATH "pressedbutton.png");
+    Command = LoadTexture(ASSETPATH "command.png");
 
-    int EnemyTimer = EnemySpawnDelay;
-    int BlockTimer = BlockSpawnDelay;
+    Place = LoadSound(ASSETPATH "block-place.wav");
+    Rotate = LoadSound(ASSETPATH "block-rotate.wav");
+    Pickup = LoadSound(ASSETPATH "block-pickup.wav");
+
+    TheFont = LoadFont(ASSETPATH "romulus.png");
+
+    EnemyTimer = EnemySpawnDelay;
+    BlockTimer = BlockSpawnDelay;
     BlockPlacer.inventorySpot = 0;
 
 
@@ -170,51 +197,93 @@ int main(void)
     return 0;
 }
 
+void RestartGame() {
+
+    int EnemyTimer = EnemySpawnDelay;
+    int BlockTimer = BlockSpawnDelay;
+
+
+    EnemySpawnDelay = 5;
+    enemies = e;
+    BlockPlacer = b;
+
+    BlockPlacer.inventorySpot = 0;
+
+    for (int i = 0; i<columns; i++) {
+        for (int j = 0; j < rows; j++) {
+            grid[j][i] = 0;
+        }
+    }
+
+    if (score > hScore) hScore = score;
+    score = 0;
+
+}
+
 //----------------------------------------------------------------------------------
 // Module Functions Definition
 //----------------------------------------------------------------------------------
 void UpdateDrawFrame(void)
 {
-    // Update
-    //---------------------------------------------------------------------------------
-    float dt = GetFrameTime();
 
-    ManageInput();
+    if (state == 0) {
+        // Update
+        //---------------------------------------------------------------------------------
+        float dt = GetFrameTime();
 
-    UpdateEnemies(dt);
-    UpdateBlocks(dt);
-    UpdateGrid(dt);
-    UpdateParticleSystems(dt);
+        ManageInput();
 
-    //----------------------------------------------------------------------------------
+        UpdateEnemies(dt);
+        UpdateBlocks(dt);
+        UpdateGrid(dt);
+        UpdateParticleSystems(dt);
 
-    // Draw
-    //----------------------------------------------------------------------------------
-    BeginDrawing();
+        //----------------------------------------------------------------------------------
 
-    ClearBackground({186,186,186});
+        // Draw
+        //----------------------------------------------------------------------------------
+        BeginDrawing();
 
-    DrawFolderBacks();
-    DrawEnemies();
-    DrawFolderFronts();
-    DrawTexture(Background, 0, 0, WHITE);
-    DrawBlocks();
-    DisplayBrokenTiles();
-    ShowSelection();
-    DrawParticleSystems();
+        ClearBackground({186, 186, 186});
 
-    EndDrawing();
-    //----------------------------------------------------------------------------------
-}
 
-float GetSpawnCurve(float x) {
-    return 1 - powf(1 - x, 3);
+        DrawTexture(Command, GridToPosition({columns / 2, rows / 2}).x, GridToPosition({columns / 2, rows / 2}).y,
+                    WHITE);
+        DrawFolderBacks();
+        DrawEnemies();
+        DrawFolderFronts();
+        DrawTexture(Background, 0, 0, WHITE);
+        DrawTexture(PressedButton, 866, 16, WHITE);
+        DrawBlocks();
+        DisplayBrokenTiles();
+        ShowSelection();
+        DrawParticleSystems();
+        auto sScore = std::to_string(score);
+        auto shScore = std::to_string(hScore);
+        DrawText((std::string("SCORE:") + sScore).c_str(), 40, 18, 20, WHITE);
+        DrawText((std::string("HIGH SCORE:") + shScore).c_str(), 680, 18, 20, WHITE);
+
+        EndDrawing();
+        //----------------------------------------------------------------------------------
+    }
+
 }
 
 void DrawFolderBacks() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
+
+            if (i == columns / 2 && j == rows / 2) {
+                continue;
+            }
+
             auto position = GridToPosition({i, j});
+
+            if (grid[j][i] > 0) {
+                DrawTexture(BrokenFolderBack, (int)position.x + 2, (int)position.y - 5, WHITE);
+                continue;
+            }
+
             DrawTexture(FolderBack, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
@@ -223,7 +292,18 @@ void DrawFolderBacks() {
 void DrawFolderFronts() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
+
+            if (i == columns / 2 && j == rows / 2) {
+                continue;
+            }
+
             auto position = GridToPosition({i, j});
+
+            if (grid[j][i] > 0) {
+                DrawTexture(BrokenFolderFront, (int)position.x + 2, (int)position.y - 5, WHITE);
+                continue;
+            }
+
             DrawTexture(FolderFront, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
@@ -248,6 +328,8 @@ void RotateBlocks() {
             content.y = x;
         }
     }
+
+    PlaySound(Rotate);
 }
 
 void ManageInput() {
@@ -275,9 +357,10 @@ void ManageInput() {
         Rectangle touchArea = { 675, 42, 254, 479};
 
         if (CheckCollisionPointRec(touchPosition, touchArea)) {
-            int item = std::round((touchPosition.y - 55) / 64);
+            int item = std::round((touchPosition.y - 96) / 86);
             if (item >= 0 && item < MAXHOLDING) {
                 BlockPlacer.selected = item;
+                PlaySound(Pickup);
             }
         }
 
@@ -366,8 +449,10 @@ void DrawParticleSystems() {
 }
 
 void KillEnemy(int index) {
+    if (!enemies.enabled[index]) return;
     enemies.enabled[index] = false;
     CreateEnemyParticles(enemies.position[index]);
+    score += 1;
 }
 
 void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
@@ -377,11 +462,14 @@ void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
 
             for (int i=0;i<MAXENEMIES;i++) {
                 auto tile = PositionToGrid(enemies.position[i]);
-                if (tile.x == position.x + content.x && tile.y == position.y + content.y) {
-                    KillEnemy(i);
+                if (isInGrid(enemies.position[i])) {
+                    if (tile.x == position.x + content.x && tile.y == position.y + content.y) {
+                        KillEnemy(i);
+                    }
                 }
             }
         }
+        PlaySound(Place);
         ShuffleDownBlocks(BlockPlacer.selected);
     }
 }
@@ -462,7 +550,7 @@ void SpawnEnemy(int index) {
 }
 
 void GameOver() {
-
+    RestartGame();
 }
 
 Vector2 GetNextMoveTile(int index) {
@@ -583,7 +671,7 @@ void DrawBlocks() {
     for (int i=0;i<MAXHOLDING;i++) {
         if (i >= BlockPlacer.inventorySpot) return;
         if (i == BlockPlacer.selected) color = GREEN; else color = BLUE;
-        DrawBlock(BlockPlacer.inventory[i], {802.0f - BlockPlacer.inventory[i].width * 12, 55 + i*64.0f}, 24, color);
+        DrawBlock(BlockPlacer.inventory[i], {802.0f - 12, 96 + i*86.0f}, 24, color);
     }
 }
 
