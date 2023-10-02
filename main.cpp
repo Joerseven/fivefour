@@ -58,7 +58,7 @@ struct BlockPlacer {
     int inventorySpot;
 } BlockPlacer;
 
-int grid[10][13];
+
 
 //----------------------------------------------------------------------------------
 // Global Variables Definition
@@ -66,16 +66,18 @@ int grid[10][13];
 const int screenWidth = 948;
 const int screenHeight = 533;
 
-const int gridOffsetX = 35;
-const int gridOffsetY = 40;
+const int gridOffsetX = 35 + 20;
+const int gridOffsetY = 40 + 10;
 
-const int columns = 13;
-const int rows = 10;
+const int columns = 9;
+const int rows = 7;
 
-const int EnemySpawnDelay = 20;
-const int BlockSpawnDelay = 300;
+int grid[rows][columns];
 
-const int EnemyHideTime = 500;
+const int EnemySpawnDelay = 5;
+const int BlockSpawnDelay = 3;
+
+const int EnemyHideTime = 4;
 const int EnemySpeed = 25;
 const Vector2Int FinalTile = {7,6};
 
@@ -83,11 +85,11 @@ Texture2D Background;
 Texture2D FolderBack;
 Texture2D FolderFront;
 
-int EnemyTimer;
-int BlockTimer;
+float EnemyTimer;
+float BlockTimer;
 
 Vector2 TouchPosition;
-int currentGuesture;
+int currentGesture;
 
 //----------------------------------------------------------------------------------
 // Module functions declaration
@@ -191,7 +193,7 @@ void DrawFolderBacks() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
             auto position = GridToPosition({i, j});
-            DrawTexture(FolderBack, (int)position.x, (int)position.y, WHITE);
+            DrawTexture(FolderBack, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
 }
@@ -200,7 +202,7 @@ void DrawFolderFronts() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
             auto position = GridToPosition({i, j});
-            DrawTexture(FolderFront, (int)position.x, (int)position.y, WHITE);
+            DrawTexture(FolderFront, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
 }
@@ -216,11 +218,29 @@ bool DoesBlockFit(Block block, Vector2Int position) {
     return true;
 }
 
+void RotateBlocks() {
+    for (Block &block : BlockPlacer.inventory) {
+        for (Vector2Int &content : block.contents) {
+            int x = content.x;
+            content.x = -content.y;
+            content.y = x;
+        }
+    }
+}
+
 void ManageInput() {
 
-    currentGuesture = GetGestureDetected();
+    currentGesture = GetGestureDetected();
+    auto touchPosition = GetTouchPosition(0);
 
-    if (currentGuesture == GESTURE_HOLD || currentGuesture == GESTURE_DRAG) {
+    if (currentGesture == GESTURE_TAP || currentGesture == GESTURE_DOUBLETAP) {
+        Rectangle touchArea = {866, 16, 20, 20};
+        if (CheckCollisionPointRec(touchPosition, touchArea) && BlockPlacer.selected < 0) {
+            RotateBlocks();
+        }
+    }
+
+    if (currentGesture == GESTURE_HOLD || currentGesture == GESTURE_DRAG) {
 
         if (BlockPlacer.selected != -1) {
             return;
@@ -231,7 +251,6 @@ void ManageInput() {
         }
 
         Rectangle touchArea = { 675, 42, 254, 479};
-        auto touchPosition = GetTouchPosition(0);
 
         if (CheckCollisionPointRec(touchPosition, touchArea)) {
             int item = std::round((touchPosition.y - 55) / 64);
@@ -243,10 +262,9 @@ void ManageInput() {
         return;
     }
 
-    if (currentGuesture == GESTURE_NONE) {
+    if (currentGesture == GESTURE_NONE) {
 
         if (BlockPlacer.selected >= 0) {
-            auto touchPosition = GetTouchPosition(0);
             if (isInGrid(touchPosition)) {
                 auto HoverTile = PositionToGrid(touchPosition);
                 auto doesFit = DoesBlockFit(BlockPlacer.inventory[BlockPlacer.selected], HoverTile);
@@ -326,16 +344,16 @@ void ShowSelection() {
 }
 
 Vector2Int PositionToGrid(Vector2 pos) {
-    return { (int)((pos.x - gridOffsetX) / 48), (int)((pos.y - gridOffsetY) / 48)};
+    return { (int)((pos.x - gridOffsetX) / 66), (int)((pos.y - gridOffsetY) / 68)};
 }
 
 Vector2 GridToPosition(Vector2Int pos) {
-    return {(pos.x*48.0f) + gridOffsetX, (pos.y*48.0f) + gridOffsetY};
+    return {(pos.x*66.0f) + gridOffsetX, (pos.y*68.0f) + gridOffsetY};
 }
 
 bool isInGrid(Vector2 position) {
-    return position.x >= gridOffsetX && position.x <= gridOffsetX + (48 * columns) &&
-    position.y >= gridOffsetY && position.y <= gridOffsetY + (48 * rows);
+    return position.x >= gridOffsetX && position.x <= gridOffsetX + (66.0f * columns) &&
+    position.y >= gridOffsetY && position.y <= gridOffsetY + (68 * rows);
 }
 
 
