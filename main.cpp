@@ -75,7 +75,7 @@ const int rows = 10;
 const int EnemySpawnDelay = 2000;
 const int BlockSpawnDelay = 300;
 
-const int EnemyHideTime = 500;
+const int EnemyHideTime = 2;
 const int EnemySpeed = 25;
 const Vector2Int FinalTile = {7,6};
 
@@ -347,14 +347,14 @@ void SpawnEnemy(int index) {
 
     if (side % 2 == 0) {
 
-        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? 12 : 0, GetRandomValue(0,9)}), {24,24});
+        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? 12 : 0, GetRandomValue(0,9)}), {24,34});
 
         enemies.position[index].y = enemies.target[index].y;
         enemies.position[index].x = enemies.target[index].x - (((side-1)/2 > 0) ? -48.0f : 48.0f);
 
     } else {
 
-        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,12), ((side-1)/2 > 0) ? 9 : 0}), {24,24});
+        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,12), ((side-1)/2 > 0) ? 9 : 0}), {24,34});
 
         enemies.position[index].y = enemies.target[index].y -(((side-1)/2 > 0) ? -48.0f : 48.0f);
         enemies.position[index].x = enemies.target[index].x;
@@ -379,11 +379,11 @@ Vector2 GetNextMoveTile(int index) {
     if ((direction == 1 && currentTile.x != FinalTile.x) || currentTile.y == FinalTile.y) {
         target.x = (currentTile.x > FinalTile.x) ? currentTile.x - 1 : currentTile.x + 1;
         target.y = currentTile.y;
-        return Vector2Add(GridToPosition(target),{24,24});
+        return Vector2Add(GridToPosition(target),{24,34});
     } else {
         target.y = (currentTile.y > FinalTile.y) ? currentTile.y - 1 : currentTile.y + 1;
         target.x = currentTile.x;
-        return Vector2Add(GridToPosition(target),{24,24});
+        return Vector2Add(GridToPosition(target),{24,34});
     }
 
 }
@@ -432,12 +432,16 @@ void DrawEnemies() {
 }
 
 Block CreateBlock() {
-    int blockType = GetRandomValue(0, 2);
+    int blockType = GetRandomValue(0, 4);
     switch(blockType) {
         case 0:
             return {{{1,0}, {0,0}, {-1, 0}}, 1.5, 3};
         case 1:
             return {{{1,0}, {0, 1}, {0,0}}, 2, 3};
+        case 2:
+            return {{{1, 0}, {0, 0}, {-1, 0}, {0, -1}}, 1.5, 4};
+        case 3:
+            return {{{1, 0}, {0,0}, {-1, 0}, {-1, -1}}, 1.5, 4};
         default:
             return {{{0,0}}, 1, 1};
     }
@@ -463,16 +467,18 @@ void DrawBlockOnGrid(Block block, Vector2Int position, bool fits) {
     }
 }
 
-void DrawBlock(Block block, Vector2 position, int size) {
+void DrawBlock(Block block, Vector2 position, int size, Color color) {
     for (auto & content : block.contents) {
-        DrawRectangle(content.x*size + position.x, content.y*size + position.y, size, size, GRAY);
+        DrawRectangleRounded({content.x*size + position.x, content.y*size + position.y, (float)size, (float)size},0.5, 30, color);
     }
 }
 
 void DrawBlocks() {
+    Color color = BLUE;
     for (int i=0;i<MAXHOLDING;i++) {
         if (i >= BlockPlacer.inventorySpot) return;
-        DrawBlock(BlockPlacer.inventory[i], {802.0f - BlockPlacer.inventory[i].width * 12, 55 + i*64.0f}, 24);
+        if (i == BlockPlacer.selected) color = GREEN; else color = BLUE;
+        DrawBlock(BlockPlacer.inventory[i], {802.0f - BlockPlacer.inventory[i].width * 12, 55 + i*64.0f}, 24, color);
     }
 }
 
