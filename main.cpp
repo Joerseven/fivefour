@@ -30,6 +30,7 @@
 #define MAXENEMIES 30
 #define MAXBLOCKSIZE 6
 #define MAXHOLDING 5
+#define MAXPARTICLES 10
 
 typedef struct Vector2Int {
     int x;
@@ -41,6 +42,17 @@ typedef struct Block {
     float width;
     int count;
 } Block;
+
+typedef struct ParticleBurst {
+    Vector2 origin;
+    bool enabled[MAXPARTICLES];
+    Vector2 position[MAXPARTICLES];
+    Vector2 velocity[MAXPARTICLES];
+    float lifetime[MAXPARTICLES];
+    float size[MAXPARTICLES];
+    Color color[MAXPARTICLES];
+    bool active;
+} ParticleBurst;
 
 
 struct Enemies {
@@ -58,7 +70,7 @@ struct BlockPlacer {
     int inventorySpot;
 } BlockPlacer;
 
-
+ParticleBurst ParticleSystem[20];
 
 //----------------------------------------------------------------------------------
 // Global Variables Definition
@@ -74,7 +86,7 @@ const int rows = 7;
 
 int grid[rows][columns];
 
-const int EnemySpawnDelay = 5;
+int EnemySpawnDelay = 5;
 const int BlockSpawnDelay = 3;
 
 const int EnemyHideTime = 4;
@@ -110,6 +122,9 @@ void UpdateGrid(float dt);
 void DisplayBrokenTiles();
 void DrawFolderBacks();
 void DrawFolderFronts();
+void CreateEnemyParticles(Vector2 origin);
+void UpdateParticleSystems(float dt);
+void DrawParticleSystems();
 
 // Global Variables
 
@@ -169,6 +184,8 @@ void UpdateDrawFrame(void)
     UpdateEnemies(dt);
     UpdateBlocks(dt);
     UpdateGrid(dt);
+    UpdateParticleSystems(dt);
+
     //----------------------------------------------------------------------------------
 
     // Draw
@@ -184,9 +201,14 @@ void UpdateDrawFrame(void)
     DrawBlocks();
     DisplayBrokenTiles();
     ShowSelection();
+    DrawParticleSystems();
 
     EndDrawing();
     //----------------------------------------------------------------------------------
+}
+
+float GetSpawnCurve(float x) {
+    return 1 - powf(1 - x, 3);
 }
 
 void DrawFolderBacks() {
@@ -285,13 +307,72 @@ void ShuffleDownBlocks(int selected) {
     BlockPlacer.inventorySpot--;
 }
 
+void CreateEnemyParticles(Vector2 origin) {
+    int choice = -1;
+    for (int i = 0; i < 20; i++) {
+        if (ParticleSystem[i].active) continue;
+        choice = i;
+        break;
+    }
+
+    if (choice < 0) return;
+
+    ParticleSystem[choice].origin = origin;
+    ParticleSystem[choice].active = true;
+
+    for (int i = 0; i < MAXPARTICLES; i++) {
+        ParticleSystem[choice].color[i] = RED;
+        ParticleSystem[choice].size[i] = (float)GetRandomValue(1, 4);
+        ParticleSystem[choice].enabled[i] = true;
+        ParticleSystem[choice].lifetime[i] = GetRandomValue(2, 5) / 10.0f;
+        ParticleSystem[choice].position[i] = origin;
+        ParticleSystem[choice].velocity[i] = {(float)GetRandomValue(-60,60), (float)GetRandomValue(-60,60)};
+    }
+
+}
+
+void UpdateParticleSystems(float dt) {
+    for (ParticleBurst& system : ParticleSystem) {
+        if (!system.active) continue;
+        bool stillAlive = false;
+        for (int i = 0; i < MAXPARTICLES; i++) {
+
+            if (!system.enabled[i]) continue;
+
+            system.lifetime[i] -= dt;
+
+            if (system.lifetime[i] < 0) {
+                system.enabled[i] = false;
+                continue;
+            }
+
+            system.position[i] = Vector2Add(system.position[i], Vector2Scale(system.velocity[i], dt));
+
+            stillAlive = true;
+        }
+        if (!stillAlive) system.active = false;
+    }
+
+}
+
+void DrawParticleSystems() {
+    for (ParticleBurst& system : ParticleSystem) {
+        if (!system.active) continue;
+        for (int i = 0; i < MAXPARTICLES; i++) {
+            if (!system.enabled[i]) continue;
+            DrawCircle(system.position[i].x, system.position[i].y, system.size[i], system.color[i]);
+        }
+    }
+}
+
 void KillEnemy(int index) {
     enemies.enabled[index] = false;
+    CreateEnemyParticles(enemies.position[index]);
 }
 
 void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
     if (doesFit) {
-        for (auto &content: block.contents) {
+        for (Vector2Int &content: block.contents) {
             grid[position.y + content.y][position.x + content.x] = 1000;
 
             for (int i=0;i<MAXENEMIES;i++) {
@@ -320,7 +401,7 @@ void DisplayBrokenTiles() {
         for (int j=0;j<columns;j++) {
             if (grid[i][j] > 0) {
                 auto pos = GridToPosition({j, i});
-                DrawRectangle(pos.x, pos.y, 48, 48, RED);
+                //DrawRectangle(pos.x, pos.y, 48, 48, RED);
             }
         }
     }
@@ -411,8 +492,13 @@ void UpdateEnemies(float dt) {
     bool spawnEnemy = false;
 
     if (EnemyTimer <= 0) {
+
+        EnemySpawnDelay -= 0.1;
+        if (EnemySpawnDelay < 2) EnemySpawnDelay = 2;
+
         EnemyTimer = EnemySpawnDelay;
         spawnEnemy = true;
+
     }
 
     for (int i=0;i<MAXENEMIES;i++) {
@@ -477,7 +563,8 @@ void UpdateBlocks(float dt) {
 void DrawBlockOnGrid(Block block, Vector2Int position, bool fits) {
     for (int i = 0;i<block.count; i++) {
         auto pos = GridToPosition({position.x + block.contents[i].x, position.y + block.contents[i].y});
-        DrawRectangle(pos.x, pos.y, 48, 48, fits ? Color{30,170,30,130} : Color{170, 30 , 30, 130});
+        auto color = fits ? Color{ 30, 170, 30, 130 } : Color{ 170, 30 , 30, 130 };
+        DrawRectangleRounded({ pos.x-4, pos.y-4, 56, 56}, 0.5, 10, color);
     }
 }
 
