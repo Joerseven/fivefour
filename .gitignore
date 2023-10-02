@@ -1,3 +1,8 @@
 cmake-build-debug/
 cmake-build-web/
 .idea
+/build
+.vs
+/vsbuild
+/out
+CMakeSettings.json

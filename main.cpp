@@ -72,7 +72,7 @@ const int gridOffsetY = 40;
 const int columns = 13;
 const int rows = 10;
 
-const int EnemySpawnDelay = 2000;
+const int EnemySpawnDelay = 20;
 const int BlockSpawnDelay = 300;
 
 const int EnemyHideTime = 500;
@@ -173,7 +173,7 @@ void UpdateDrawFrame(void)
     //----------------------------------------------------------------------------------
     BeginDrawing();
 
-    ClearBackground((Color){186,186,186});
+    ClearBackground({186,186,186});
 
     DrawFolderBacks();
     DrawEnemies();
@@ -288,8 +288,8 @@ void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
 }
 
 void UpdateGrid(float dt) {
-    for (int i=0;i<10;i++) {
-        for (int j=0;j<13;j++) {
+    for (int i=0;i<rows;i++) {
+        for (int j=0;j<columns;j++) {
             if (grid[i][j] > 0) {
                 grid[i][j]--;
             }
@@ -298,8 +298,8 @@ void UpdateGrid(float dt) {
 }
 
 void DisplayBrokenTiles() {
-    for (int i=0;i<10;i++) {
-        for (int j=0;j<13;j++) {
+    for (int i=0;i<rows;i++) {
+        for (int j=0;j<columns;j++) {
             if (grid[i][j] > 0) {
                 auto pos = GridToPosition({j, i});
                 DrawRectangle(pos.x, pos.y, 48, 48, RED);
@@ -347,14 +347,14 @@ void SpawnEnemy(int index) {
 
     if (side % 2 == 0) {
 
-        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? 12 : 0, GetRandomValue(0,9)}), {24,24});
+        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? columns - 1 : 0, GetRandomValue(0,rows - 1)}), {24,24});
 
         enemies.position[index].y = enemies.target[index].y;
         enemies.position[index].x = enemies.target[index].x - (((side-1)/2 > 0) ? -48.0f : 48.0f);
 
     } else {
 
-        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,12), ((side-1)/2 > 0) ? 9 : 0}), {24,24});
+        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,columns - 1), ((side-1)/2 > 0) ? rows - 1 : 0}), {24,24});
 
         enemies.position[index].y = enemies.target[index].y -(((side-1)/2 > 0) ? -48.0f : 48.0f);
         enemies.position[index].x = enemies.target[index].x;
@@ -459,7 +459,7 @@ void UpdateBlocks(float dt) {
 void DrawBlockOnGrid(Block block, Vector2Int position, bool fits) {
     for (int i = 0;i<block.count; i++) {
         auto pos = GridToPosition({position.x + block.contents[i].x, position.y + block.contents[i].y});
-        DrawRectangle(pos.x, pos.y, 48, 48, fits ? (Color){30,170,30,130} : (Color){170, 30 , 30, 130});
+        DrawRectangle(pos.x, pos.y, 48, 48, fits ? Color{30,170,30,130} : Color{170, 30 , 30, 130});
     }
 }
 
@@ -471,7 +471,9 @@ void DrawBlock(Block block, Vector2 position, int size) {
 
 void DrawBlocks() {
     for (int i=0;i<MAXHOLDING;i++) {
-        if (i >= BlockPlacer.inventorySpot) return;
+        if (i >= BlockPlacer.inventorySpot) {
+            return;
+        }
         DrawBlock(BlockPlacer.inventory[i], {802.0f - BlockPlacer.inventory[i].width * 12, 55 + i*64.0f}, 24);
     }
 }
