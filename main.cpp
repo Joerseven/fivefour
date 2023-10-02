@@ -30,6 +30,7 @@
 #define MAXENEMIES 30
 #define MAXBLOCKSIZE 6
 #define MAXHOLDING 5
+#define MAXPARTICLES 10
 
 typedef struct Vector2Int {
     int x;
@@ -41,6 +42,17 @@ typedef struct Block {
     float width;
     int count;
 } Block;
+
+typedef struct ParticleBurst {
+    Vector2 origin;
+    bool enabled[MAXPARTICLES];
+    Vector2 position[MAXPARTICLES];
+    Vector2 velocity[MAXPARTICLES];
+    float lifetime[MAXPARTICLES];
+    float size[MAXPARTICLES];
+    Color color[MAXPARTICLES];
+    bool active;
+} ParticleBurst;
 
 
 struct Enemies {
@@ -58,7 +70,7 @@ struct BlockPlacer {
     int inventorySpot;
 } BlockPlacer;
 
-int grid[10][13];
+ParticleBurst ParticleSystem[20];
 
 //----------------------------------------------------------------------------------
 // Global Variables Definition
@@ -66,16 +78,18 @@ int grid[10][13];
 const int screenWidth = 948;
 const int screenHeight = 533;
 
-const int gridOffsetX = 35;
-const int gridOffsetY = 40;
+const int gridOffsetX = 35 + 20;
+const int gridOffsetY = 40 + 10;
 
-const int columns = 13;
-const int rows = 10;
+const int columns = 9;
+const int rows = 7;
 
-const int EnemySpawnDelay = 2000;
-const int BlockSpawnDelay = 300;
+int grid[rows][columns];
 
-const int EnemyHideTime = 2;
+int EnemySpawnDelay = 5;
+const int BlockSpawnDelay = 3;
+
+const int EnemyHideTime = 4;
 const int EnemySpeed = 25;
 const Vector2Int FinalTile = {7,6};
 
@@ -83,11 +97,11 @@ Texture2D Background;
 Texture2D FolderBack;
 Texture2D FolderFront;
 
-int EnemyTimer;
-int BlockTimer;
+float EnemyTimer;
+float BlockTimer;
 
 Vector2 TouchPosition;
-int currentGuesture;
+int currentGesture;
 
 //----------------------------------------------------------------------------------
 // Module functions declaration
@@ -108,6 +122,9 @@ void UpdateGrid(float dt);
 void DisplayBrokenTiles();
 void DrawFolderBacks();
 void DrawFolderFronts();
+void CreateEnemyParticles(Vector2 origin);
+void UpdateParticleSystems(float dt);
+void DrawParticleSystems();
 
 // Global Variables
 
@@ -167,13 +184,15 @@ void UpdateDrawFrame(void)
     UpdateEnemies(dt);
     UpdateBlocks(dt);
     UpdateGrid(dt);
+    UpdateParticleSystems(dt);
+
     //----------------------------------------------------------------------------------
 
     // Draw
     //----------------------------------------------------------------------------------
     BeginDrawing();
 
-    ClearBackground((Color){186,186,186});
+    ClearBackground({186,186,186});
 
     DrawFolderBacks();
     DrawEnemies();
@@ -182,16 +201,21 @@ void UpdateDrawFrame(void)
     DrawBlocks();
     DisplayBrokenTiles();
     ShowSelection();
+    DrawParticleSystems();
 
     EndDrawing();
     //----------------------------------------------------------------------------------
+}
+
+float GetSpawnCurve(float x) {
+    return 1 - powf(1 - x, 3);
 }
 
 void DrawFolderBacks() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
             auto position = GridToPosition({i, j});
-            DrawTexture(FolderBack, (int)position.x, (int)position.y, WHITE);
+            DrawTexture(FolderBack, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
 }
@@ -200,7 +224,7 @@ void DrawFolderFronts() {
     for (int i=0; i<columns; i++) {
         for (int j=0; j<rows; j++) {
             auto position = GridToPosition({i, j});
-            DrawTexture(FolderFront, (int)position.x, (int)position.y, WHITE);
+            DrawTexture(FolderFront, (int)position.x + 2, (int)position.y - 5, WHITE);
         }
     }
 }
@@ -216,11 +240,29 @@ bool DoesBlockFit(Block block, Vector2Int position) {
     return true;
 }
 
+void RotateBlocks() {
+    for (Block &block : BlockPlacer.inventory) {
+        for (Vector2Int &content : block.contents) {
+            int x = content.x;
+            content.x = -content.y;
+            content.y = x;
+        }
+    }
+}
+
 void ManageInput() {
 
-    currentGuesture = GetGestureDetected();
+    currentGesture = GetGestureDetected();
+    auto touchPosition = GetTouchPosition(0);
 
-    if (currentGuesture == GESTURE_HOLD || currentGuesture == GESTURE_DRAG) {
+    if (currentGesture == GESTURE_TAP || currentGesture == GESTURE_DOUBLETAP) {
+        Rectangle touchArea = {866, 16, 20, 20};
+        if (CheckCollisionPointRec(touchPosition, touchArea) && BlockPlacer.selected < 0) {
+            RotateBlocks();
+        }
+    }
+
+    if (currentGesture == GESTURE_HOLD || currentGesture == GESTURE_DRAG) {
 
         if (BlockPlacer.selected != -1) {
             return;
@@ -231,7 +273,6 @@ void ManageInput() {
         }
 
         Rectangle touchArea = { 675, 42, 254, 479};
-        auto touchPosition = GetTouchPosition(0);
 
         if (CheckCollisionPointRec(touchPosition, touchArea)) {
             int item = std::round((touchPosition.y - 55) / 64);
@@ -243,10 +284,9 @@ void ManageInput() {
         return;
     }
 
-    if (currentGuesture == GESTURE_NONE) {
+    if (currentGesture == GESTURE_NONE) {
 
         if (BlockPlacer.selected >= 0) {
-            auto touchPosition = GetTouchPosition(0);
             if (isInGrid(touchPosition)) {
                 auto HoverTile = PositionToGrid(touchPosition);
                 auto doesFit = DoesBlockFit(BlockPlacer.inventory[BlockPlacer.selected], HoverTile);
@@ -267,13 +307,72 @@ void ShuffleDownBlocks(int selected) {
     BlockPlacer.inventorySpot--;
 }
 
+void CreateEnemyParticles(Vector2 origin) {
+    int choice = -1;
+    for (int i = 0; i < 20; i++) {
+        if (ParticleSystem[i].active) continue;
+        choice = i;
+        break;
+    }
+
+    if (choice < 0) return;
+
+    ParticleSystem[choice].origin = origin;
+    ParticleSystem[choice].active = true;
+
+    for (int i = 0; i < MAXPARTICLES; i++) {
+        ParticleSystem[choice].color[i] = RED;
+        ParticleSystem[choice].size[i] = (float)GetRandomValue(1, 4);
+        ParticleSystem[choice].enabled[i] = true;
+        ParticleSystem[choice].lifetime[i] = GetRandomValue(2, 5) / 10.0f;
+        ParticleSystem[choice].position[i] = origin;
+        ParticleSystem[choice].velocity[i] = {(float)GetRandomValue(-60,60), (float)GetRandomValue(-60,60)};
+    }
+
+}
+
+void UpdateParticleSystems(float dt) {
+    for (ParticleBurst& system : ParticleSystem) {
+        if (!system.active) continue;
+        bool stillAlive = false;
+        for (int i = 0; i < MAXPARTICLES; i++) {
+
+            if (!system.enabled[i]) continue;
+
+            system.lifetime[i] -= dt;
+
+            if (system.lifetime[i] < 0) {
+                system.enabled[i] = false;
+                continue;
+            }
+
+            system.position[i] = Vector2Add(system.position[i], Vector2Scale(system.velocity[i], dt));
+
+            stillAlive = true;
+        }
+        if (!stillAlive) system.active = false;
+    }
+
+}
+
+void DrawParticleSystems() {
+    for (ParticleBurst& system : ParticleSystem) {
+        if (!system.active) continue;
+        for (int i = 0; i < MAXPARTICLES; i++) {
+            if (!system.enabled[i]) continue;
+            DrawCircle(system.position[i].x, system.position[i].y, system.size[i], system.color[i]);
+        }
+    }
+}
+
 void KillEnemy(int index) {
     enemies.enabled[index] = false;
+    CreateEnemyParticles(enemies.position[index]);
 }
 
 void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
     if (doesFit) {
-        for (auto &content: block.contents) {
+        for (Vector2Int &content: block.contents) {
             grid[position.y + content.y][position.x + content.x] = 1000;
 
             for (int i=0;i<MAXENEMIES;i++) {
@@ -288,8 +387,8 @@ void PlaceBlock(Block block, Vector2Int position, bool doesFit) {
 }
 
 void UpdateGrid(float dt) {
-    for (int i=0;i<10;i++) {
-        for (int j=0;j<13;j++) {
+    for (int i=0;i<rows;i++) {
+        for (int j=0;j<columns;j++) {
             if (grid[i][j] > 0) {
                 grid[i][j]--;
             }
@@ -298,11 +397,11 @@ void UpdateGrid(float dt) {
 }
 
 void DisplayBrokenTiles() {
-    for (int i=0;i<10;i++) {
-        for (int j=0;j<13;j++) {
+    for (int i=0;i<rows;i++) {
+        for (int j=0;j<columns;j++) {
             if (grid[i][j] > 0) {
                 auto pos = GridToPosition({j, i});
-                DrawRectangle(pos.x, pos.y, 48, 48, RED);
+                //DrawRectangle(pos.x, pos.y, 48, 48, RED);
             }
         }
     }
@@ -326,16 +425,16 @@ void ShowSelection() {
 }
 
 Vector2Int PositionToGrid(Vector2 pos) {
-    return { (int)((pos.x - gridOffsetX) / 48), (int)((pos.y - gridOffsetY) / 48)};
+    return { (int)((pos.x - gridOffsetX) / 66), (int)((pos.y - gridOffsetY) / 68)};
 }
 
 Vector2 GridToPosition(Vector2Int pos) {
-    return {(pos.x*48.0f) + gridOffsetX, (pos.y*48.0f) + gridOffsetY};
+    return {(pos.x*66.0f) + gridOffsetX, (pos.y*68.0f) + gridOffsetY};
 }
 
 bool isInGrid(Vector2 position) {
-    return position.x >= gridOffsetX && position.x <= gridOffsetX + (48 * columns) &&
-    position.y >= gridOffsetY && position.y <= gridOffsetY + (48 * rows);
+    return position.x >= gridOffsetX && position.x <= gridOffsetX + (66.0f * columns) &&
+    position.y >= gridOffsetY && position.y <= gridOffsetY + (68 * rows);
 }
 
 
@@ -347,14 +446,14 @@ void SpawnEnemy(int index) {
 
     if (side % 2 == 0) {
 
-        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? 12 : 0, GetRandomValue(0,9)}), {24,34});
+        enemies.target[index] = Vector2Add(GridToPosition({((side-1)/2 > 0) ? columns - 1 : 0, GetRandomValue(0,rows - 1)}), {24,34});
 
         enemies.position[index].y = enemies.target[index].y;
         enemies.position[index].x = enemies.target[index].x - (((side-1)/2 > 0) ? -48.0f : 48.0f);
 
     } else {
 
-        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,12), ((side-1)/2 > 0) ? 9 : 0}), {24,34});
+        enemies.target[index] = Vector2Add(GridToPosition({GetRandomValue(0,columns - 1), ((side-1)/2 > 0) ? rows - 1 : 0}), {24,34});
 
         enemies.position[index].y = enemies.target[index].y -(((side-1)/2 > 0) ? -48.0f : 48.0f);
         enemies.position[index].x = enemies.target[index].x;
@@ -393,8 +492,13 @@ void UpdateEnemies(float dt) {
     bool spawnEnemy = false;
 
     if (EnemyTimer <= 0) {
+
+        EnemySpawnDelay -= 0.1;
+        if (EnemySpawnDelay < 2) EnemySpawnDelay = 2;
+
         EnemyTimer = EnemySpawnDelay;
         spawnEnemy = true;
+
     }
 
     for (int i=0;i<MAXENEMIES;i++) {
@@ -463,7 +567,8 @@ void UpdateBlocks(float dt) {
 void DrawBlockOnGrid(Block block, Vector2Int position, bool fits) {
     for (int i = 0;i<block.count; i++) {
         auto pos = GridToPosition({position.x + block.contents[i].x, position.y + block.contents[i].y});
-        DrawRectangle(pos.x, pos.y, 48, 48, fits ? (Color){30,170,30,130} : (Color){170, 30 , 30, 130});
+        auto color = fits ? Color{ 30, 170, 30, 130 } : Color{ 170, 30 , 30, 130 };
+        DrawRectangleRounded({ pos.x-4, pos.y-4, 56, 56}, 0.5, 10, color);
     }
 }
 
